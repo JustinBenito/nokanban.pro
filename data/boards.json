@@ -1,0 +1,35 @@
+{
+  "jb": {
+    "alias": "jb",
+    "columns": {
+      "todo": {
+        "id": "todo",
+        "title": "To-do",
+        "tasks": [
+          {
+            "id": "task-1756728388390-edgkr1s14",
+            "content": "hi",
+            "createdAt": "2025-09-01T12:06:28.390Z"
+          }
+        ]
+      },
+      "inprogress": {
+        "id": "inprogress",
+        "title": "In Progress",
+        "tasks": []
+      },
+      "complete": {
+        "id": "complete",
+        "title": "Complete",
+        "tasks": []
+      }
+    },
+    "columnOrder": [
+      "todo",
+      "inprogress",
+      "complete"
+    ],
+    "createdAt": "2025-09-01T12:06:28.390Z",
+    "updatedAt": "2025-09-01T12:06:44.030Z"
+  }
+}
