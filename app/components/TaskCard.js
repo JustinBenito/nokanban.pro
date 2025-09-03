@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 export default function TaskCard({ task, index, onDelete, onDragStart, onDragEnd }) {
   const [isDragging, setIsDragging] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDragStart = (e) => {
     setIsDragging(true);
@@ -30,18 +29,7 @@ export default function TaskCard({ task, index, onDelete, onDragStart, onDragEnd
 
   const handleDeleteClick = (e) => {
     e.stopPropagation();
-    setShowDeleteConfirm(true);
-  };
-
-  const handleConfirmDelete = (e) => {
-    e.stopPropagation();
-    onDelete();
-    setShowDeleteConfirm(false);
-  };
-
-  const handleCancelDelete = (e) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(false);
+    onDelete(task);
   };
 
   const formatDate = (dateString) => {
@@ -66,32 +54,10 @@ export default function TaskCard({ task, index, onDelete, onDragStart, onDragEnd
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      className={`group bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md task-card cursor-move relative ${
+      className={`group bg-white border border-gray-200 rounded-lg p-3 task-card cursor-move relative ${
         isDragging ? 'task-dragging opacity-50' : ''
       }`}
     >
-      {/* Delete Confirmation Overlay */}
-      {showDeleteConfirm && (
-        <div className="absolute inset-0 bg-red-50 border border-red-200 rounded-lg p-3 z-10">
-          <div className="text-center">
-            <p className="text-sm text-red-800 mb-3">Delete this task?</p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={handleConfirmDelete}
-                className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
-              <button
-                onClick={handleCancelDelete}
-                className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Task Content */}
       <div className="flex items-start justify-between">

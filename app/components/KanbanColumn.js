@@ -94,10 +94,10 @@ export default function KanbanColumn({
     }
   };
 
-  const columnHeight = isMobile ? 'flex-1' : 'h-[600px]';
+  const columnHeight = isMobile ? 'flex-1' : 'h-[calc(100vh-12rem)]';
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${isMobile ? 'flex-1 min-h-0' : ''}`}>
+    <div className={`bg-white rounded-lg border border-gray-200 flex flex-col ${isMobile ? 'flex-1 min-h-0' : 'h-[calc(100vh-12rem)]'}`}>
       {/* Column Header */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
@@ -160,7 +160,7 @@ export default function KanbanColumn({
               <TaskCard
                 task={task}
                 index={index}
-                onDelete={() => onDeleteTask(task.id)}
+                onDelete={onDeleteTask}
                 onDragStart={() => onDragStart(task, column.id)}
                 onDragEnd={onDragEnd}
               />
