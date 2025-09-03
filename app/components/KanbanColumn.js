@@ -31,6 +31,7 @@ export default function KanbanColumn({
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleAddTask();
     } else if (e.key === 'Escape') {
       setIsAddingTask(false);
@@ -93,10 +94,10 @@ export default function KanbanColumn({
     }
   };
 
-  const columnHeight = isMobile ? 'mobile-kanban-column' : 'h-[600px]';
+  const columnHeight = isMobile ? 'flex-1' : 'h-[600px]';
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${isMobile ? 'mobile-kanban-column' : ''}`}>
+    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col ${isMobile ? 'flex-1 min-h-0' : ''}`}>
       {/* Column Header */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
@@ -120,7 +121,7 @@ export default function KanbanColumn({
 
       {/* Column Content */}
       <div 
-        className={`flex-1 p-4 ${columnHeight} overflow-y-auto kanban-column-scroll`}
+        className={`flex-1 p-4 ${isMobile ? 'overflow-y-auto min-h-0' : columnHeight + ' overflow-y-auto'} kanban-column-scroll`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onDragLeave={handleDragLeave}
@@ -135,31 +136,16 @@ export default function KanbanColumn({
                 onChange={(e) => setNewTaskContent(e.target.value)}
                 onKeyDown={handleKeyPress}
                 onBlur={() => {
-                  if (!newTaskContent.trim()) {
+                  if (newTaskContent.trim()) {
+                    handleAddTask();
+                  } else {
                     setIsAddingTask(false);
                   }
                 }}
-                placeholder="Enter task description..."
+                placeholder="Enter task description and press Enter..."
                 className="w-full bg-transparent border-none outline-none text-sm text-gray-900 placeholder-gray-500"
                 autoFocus
               />
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={handleAddTask}
-                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => {
-                    setIsAddingTask(false);
-                    setNewTaskContent('');
-                  }}
-                  className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           )}
 
@@ -204,29 +190,8 @@ export default function KanbanColumn({
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks</h3>
               <p className="mt-1 text-sm text-gray-500">
-                Get started by adding a new task.
+                Click the + button above to add a new task.
               </p>
-              <div className="mt-6">
-                <button
-                  onClick={() => setIsAddingTask(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <svg
-                    className="-ml-1 mr-2 h-4 w-4"
-                    stroke="currentColor"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
-                  Add task
-                </button>
-              </div>
             </div>
           )}
         </div>

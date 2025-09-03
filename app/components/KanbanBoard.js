@@ -1,14 +1,45 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import KanbanColumn from './KanbanColumn';
 
 export default function KanbanBoard({ board, alias, onAddTask, onMoveTask, onDeleteTask }) {
   const [draggedTask, setDraggedTask] = useState(null);
   const [draggedFromColumn, setDraggedFromColumn] = useState(null);
   const [showCopied, setShowCopied] = useState(false);
+  const [currentAlias, setCurrentAlias] = useState(alias);
+  const [isEditingAlias, setIsEditingAlias] = useState(false);
+  const router = useRouter();
 
-  const boardUrl = `nokn.pro/${alias}`;
+  // Update current alias when alias prop changes
+  useEffect(() => {
+    setCurrentAlias(alias);
+  }, [alias]);
+
+  const boardUrl = `nokn.pro/${currentAlias}`;
+
+  const handleAliasEdit = () => {
+    setIsEditingAlias(true);
+  };
+
+  const handleAliasSubmit = (e) => {
+    e.preventDefault();
+    if (currentAlias.trim() && currentAlias !== alias) {
+      // Navigate to the new alias
+      router.push(`/${currentAlias.trim().toLowerCase()}`);
+    }
+    setIsEditingAlias(false);
+  };
+
+  const handleAliasKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleAliasSubmit(e);
+    } else if (e.key === 'Escape') {
+      setCurrentAlias(alias);
+      setIsEditingAlias(false);
+    }
+  };
 
   const handleCopyUrl = async () => {
     try {
@@ -58,9 +89,33 @@ export default function KanbanBoard({ board, alias, onAddTask, onMoveTask, onDel
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-medium text-gray-900">
-            nokn.pro/{alias}
-          </h1>
+          <div className="flex items-center">
+            <span className="text-xl font-medium text-gray-900 mr-1">nokn.pro/</span>
+            {isEditingAlias ? (
+              <form onSubmit={handleAliasSubmit} className="inline-flex">
+                <input
+                  type="text"
+                  value={currentAlias}
+                  onChange={(e) => setCurrentAlias(e.target.value)}
+                  onKeyDown={handleAliasKeyDown}
+                  onBlur={handleAliasSubmit}
+                  className="text-xl font-medium text-blue-600 bg-transparent border-b-2 border-blue-500 focus:outline-none focus:border-blue-700 min-w-0"
+                  style={{ width: `${Math.max(currentAlias.length, 8)}ch` }}
+                  pattern="[a-zA-Z0-9_-]+"
+                  title="Only letters, numbers, underscores and hyphens are allowed"
+                  autoFocus
+                />
+              </form>
+            ) : (
+              <button
+                onClick={handleAliasEdit}
+                className="text-xl font-medium text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded px-1 -mx-1 transition-colors"
+                title="Click to edit alias"
+              >
+                {currentAlias}
+              </button>
+            )}
+          </div>
           <button
             onClick={handleCopyUrl}
             className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
@@ -127,47 +182,45 @@ export default function KanbanBoard({ board, alias, onAddTask, onMoveTask, onDel
         </div>
 
         {/* Mobile Layout */}
-        <div className="md:hidden space-y-6">
-          <div className="space-y-6">
-            <KanbanColumn
-              column={board?.columns.todo}
-              title="To-do"
-              count={getTaskCount('todo')}
-              onAddTask={(content) => onAddTask(content, 'todo')}
-              onDeleteTask={onDeleteTask}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDrop={(index) => handleDrop('todo', index)}
-              isDragActive={draggedTask !== null}
-              isMobile={true}
-            />
-            <KanbanColumn
-              column={board?.columns.inprogress}
-              title="In Progress"
-              count={getTaskCount('inprogress')}
-              onAddTask={(content) => onAddTask(content, 'inprogress')}
-              onDeleteTask={onDeleteTask}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDrop={(index) => handleDrop('inprogress', index)}
-              isDragActive={draggedTask !== null}
-              isProgressColumn={true}
-              isMobile={true}
-            />
-            <KanbanColumn
-              column={board?.columns.complete}
-              title="Complete"
-              count={getTaskCount('complete')}
-              onAddTask={(content) => onAddTask(content, 'complete')}
-              onDeleteTask={onDeleteTask}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDrop={(index) => handleDrop('complete', index)}
-              isDragActive={draggedTask !== null}
-              isCompleteColumn={true}
-              isMobile={true}
-            />
-          </div>
+        <div className="md:hidden h-[calc(100vh-8rem)] flex flex-col justify-between gap-4">
+          <KanbanColumn
+            column={board?.columns.todo}
+            title="To-do"
+            count={getTaskCount('todo')}
+            onAddTask={(content) => onAddTask(content, 'todo')}
+            onDeleteTask={onDeleteTask}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDrop={(index) => handleDrop('todo', index)}
+            isDragActive={draggedTask !== null}
+            isMobile={true}
+          />
+          <KanbanColumn
+            column={board?.columns.inprogress}
+            title="In Progress"
+            count={getTaskCount('inprogress')}
+            onAddTask={(content) => onAddTask(content, 'inprogress')}
+            onDeleteTask={onDeleteTask}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDrop={(index) => handleDrop('inprogress', index)}
+            isDragActive={draggedTask !== null}
+            isProgressColumn={true}
+            isMobile={true}
+          />
+          <KanbanColumn
+            column={board?.columns.complete}
+            title="Complete"
+            count={getTaskCount('complete')}
+            onAddTask={(content) => onAddTask(content, 'complete')}
+            onDeleteTask={onDeleteTask}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDrop={(index) => handleDrop('complete', index)}
+            isDragActive={draggedTask !== null}
+            isCompleteColumn={true}
+            isMobile={true}
+          />
         </div>
       </div>
     </div>

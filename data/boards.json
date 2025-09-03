@@ -31,5 +31,48 @@
     ],
     "createdAt": "2025-09-01T12:06:28.390Z",
     "updatedAt": "2025-09-01T12:06:44.030Z"
+  },
+  "squishypotato": {
+    "alias": "squishypotato",
+    "columns": {
+      "todo": {
+        "id": "todo",
+        "title": "To-do",
+        "tasks": []
+      },
+      "inprogress": {
+        "id": "inprogress",
+        "title": "In Progress",
+        "tasks": []
+      },
+      "complete": {
+        "id": "complete",
+        "title": "Complete",
+        "tasks": [
+          {
+            "id": "task-1756893189719-kopkkqki2",
+            "content": "crestt",
+            "createdAt": "2025-09-03T09:53:09.719Z"
+          },
+          {
+            "id": "task-1756893196753-fnk7erjg2",
+            "content": "hi",
+            "createdAt": "2025-09-03T09:53:16.753Z"
+          },
+          {
+            "id": "task-1756893202145-hiinak89r",
+            "content": "geloo",
+            "createdAt": "2025-09-03T09:53:22.145Z"
+          }
+        ]
+      }
+    },
+    "columnOrder": [
+      "todo",
+      "inprogress",
+      "complete"
+    ],
+    "createdAt": "2025-09-03T09:53:09.719Z",
+    "updatedAt": "2025-09-03T09:53:22.145Z"
   }
 }
