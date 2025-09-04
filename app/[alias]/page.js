@@ -10,18 +10,46 @@ export default function BoardPage() {
   
   const [board, setBoard] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
+  const [savingTasks, setSavingTasks] = useState(new Set()); // Track tasks being saved
+  const [boardPassword, setBoardPassword] = useState(null);
+  
+  // Get password from URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const password = urlParams.get('pwd');
+      setBoardPassword(password);
+    }
+  }, []);
 
-  // Fetch board data
-  const fetchBoard = useCallback(async () => {
+  // Fetch board data - removed board dependency to prevent infinite loops
+  const fetchBoard = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
-      const response = await fetch(`/api/boards/${alias}`);
-      if (!response.ok) throw new Error('Failed to fetch board');
+      if (showLoading) setLoading(true);
+      setError(null);
+      
+      // Preserve URL parameters when fetching board
+      let apiUrl = `/api/boards/${alias}`;
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.toString()) {
+          apiUrl += `?${urlParams.toString()}`;
+        }
+      }
+      
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch board: ${errorText}`);
+      }
       const data = await response.json();
       setBoard(data);
+      setInitialLoad(false);
     } catch (err) {
       setError(err.message);
+      console.error('Error fetching board:', err);
     } finally {
       setLoading(false);
     }
@@ -53,27 +81,38 @@ export default function BoardPage() {
 
   // Add new task
   const addTask = async (content, columnId) => {
-    // Generate optimistic task
+    // Generate optimistic task with all required fields
     const tempTask = {
       id: 'temp-' + Date.now(),
       content,
+      title: content,
+      description: '',
+      priority: 'medium',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    // Optimistically update UI
-    setBoard(prevBoard => ({
-      ...prevBoard,
-      columns: {
-        ...prevBoard.columns,
-        [columnId]: {
-          ...prevBoard.columns[columnId],
-          tasks: [...(prevBoard.columns[columnId]?.tasks || []), tempTask]
+    // Optimistically update UI - ensure column exists
+    setBoard(prevBoard => {
+      const currentColumn = prevBoard.columns[columnId] || { id: columnId, title: columnId, tasks: [] };
+      return {
+        ...prevBoard,
+        columns: {
+          ...prevBoard.columns,
+          [columnId]: {
+            ...currentColumn,
+            tasks: [...(currentColumn.tasks || []), tempTask]
+          }
         }
-      }
-    }));
+      };
+    });
 
     try {
+      // Mark task as being saved
+      setSavingTasks(prev => new Set(prev).add(tempTask.id));
+      
       const response = await fetch(`/api/boards/${alias}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,72 +123,112 @@ export default function BoardPage() {
       // Get the real task from server response
       const realTask = await response.json();
       
-      // Replace temp task with real task
-      setBoard(prevBoard => ({
-        ...prevBoard,
-        columns: {
-          ...prevBoard.columns,
-          [columnId]: {
-            ...prevBoard.columns[columnId],
-            tasks: prevBoard.columns[columnId].tasks.map(task => 
-              task.id === tempTask.id ? realTask : task
-            )
+      // Remove from saving tasks
+      setSavingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempTask.id);
+        return newSet;
+      });
+      
+      // Replace temp task with real task - ensure column exists
+      setBoard(prevBoard => {
+        const currentColumn = prevBoard.columns[columnId] || { id: columnId, title: columnId, tasks: [] };
+        return {
+          ...prevBoard,
+          columns: {
+            ...prevBoard.columns,
+            [columnId]: {
+              ...currentColumn,
+              tasks: (currentColumn.tasks || []).map(task => 
+                task.id === tempTask.id ? realTask : task
+              )
+            }
           }
-        }
-      }));
+        };
+      });
     } catch (err) {
-      // Revert optimistic update on error
-      setBoard(prevBoard => ({
-        ...prevBoard,
-        columns: {
-          ...prevBoard.columns,
-          [columnId]: {
-            ...prevBoard.columns[columnId],
-            tasks: prevBoard.columns[columnId].tasks.filter(task => task.id !== tempTask.id)
+      // Remove from saving tasks on error
+      setSavingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempTask.id);
+        return newSet;
+      });
+      
+      // Revert optimistic update on error - ensure column exists
+      setBoard(prevBoard => {
+        const currentColumn = prevBoard.columns[columnId] || { id: columnId, title: columnId, tasks: [] };
+        return {
+          ...prevBoard,
+          columns: {
+            ...prevBoard.columns,
+            [columnId]: {
+              ...currentColumn,
+              tasks: (currentColumn.tasks || []).filter(task => task.id !== tempTask.id)
+            }
           }
-        }
-      }));
+        };
+      });
       setError(err.message);
     }
   };
 
   // Move task between columns
   const moveTask = async (taskId, sourceColumnId, destinationColumnId, destinationIndex) => {
-    // Store original state for potential rollback
-    const originalBoard = board;
+    // Prevent moving temporary tasks
+    if (taskId.toString().startsWith('temp-')) {
+      console.warn('Cannot move temporary task, please wait for it to be saved');
+      return;
+    }
     
-    // Optimistically update UI
+    // Store original state for potential rollback
+    const originalBoard = { ...board };
+    
+    // Optimistically update UI with better error handling
     setBoard(prevBoard => {
-      const newBoard = { ...prevBoard };
+      if (!prevBoard || !prevBoard.columns) return prevBoard;
       
-      // Find and remove task from source column
-      const sourceColumn = newBoard.columns[sourceColumnId];
+      const sourceColumn = prevBoard.columns[sourceColumnId];
+      const destColumn = prevBoard.columns[destinationColumnId];
+      
+      if (!sourceColumn || !destColumn || !sourceColumn.tasks) {
+        console.warn('Invalid column data for move operation');
+        return prevBoard;
+      }
+      
       const taskIndex = sourceColumn.tasks.findIndex(task => task.id === taskId);
       const task = sourceColumn.tasks[taskIndex];
       
-      if (task) {
-        // Remove from source
-        newBoard.columns[sourceColumnId] = {
-          ...sourceColumn,
-          tasks: sourceColumn.tasks.filter(t => t.id !== taskId)
-        };
-        
-        // Add to destination
-        const destColumn = newBoard.columns[destinationColumnId];
-        const newTasks = [...destColumn.tasks];
-        newTasks.splice(destinationIndex, 0, task);
-        
-        newBoard.columns[destinationColumnId] = {
-          ...destColumn,
-          tasks: newTasks
-        };
+      if (!task) {
+        console.warn('Task not found for move operation');
+        return prevBoard;
       }
+      
+      // Create new board state
+      const newBoard = { ...prevBoard };
+      
+      // Remove from source
+      newBoard.columns = { ...newBoard.columns };
+      newBoard.columns[sourceColumnId] = {
+        ...sourceColumn,
+        tasks: sourceColumn.tasks.filter(t => t.id !== taskId)
+      };
+      
+      // Add to destination
+      const newTasks = [...destColumn.tasks];
+      const safeDestinationIndex = Math.min(destinationIndex, newTasks.length);
+      newTasks.splice(safeDestinationIndex, 0, task);
+      
+      newBoard.columns[destinationColumnId] = {
+        ...destColumn,
+        tasks: newTasks
+      };
       
       return newBoard;
     });
 
     try {
-      const response = await fetch(`/api/boards/${alias}/tasks`, {
+      const url = boardPassword ? `/api/boards/${alias}/tasks?pwd=${boardPassword}` : `/api/boards/${alias}/tasks`;
+      const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,8 +238,19 @@ export default function BoardPage() {
           destinationIndex,
         }),
       });
-      if (!response.ok) throw new Error('Failed to move task');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to move task');
+      }
+      
+      // Refresh board data to sync with database
+      console.log('Move successful, refreshing board data');
+      await fetchBoard(false); // Don't show loading spinner
+      console.log('Board data refreshed after move');
+      
     } catch (err) {
+      console.error('Move task error:', err);
       // Revert to original state on error
       setBoard(originalBoard);
       setError(err.message);
@@ -191,7 +281,8 @@ export default function BoardPage() {
     });
 
     try {
-      const response = await fetch(`/api/boards/${alias}/tasks/${taskId}`, {
+      const url = boardPassword ? `/api/boards/${alias}/tasks/${taskId}?pwd=${boardPassword}` : `/api/boards/${alias}/tasks/${taskId}`;
+      const response = await fetch(url, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete task');
@@ -213,12 +304,34 @@ export default function BoardPage() {
     }
   };
 
-  if (loading) {
+  if (loading && initialLoad) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your kanban board...</p>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header Skeleton */}
+          <div className="mb-6">
+            <div className="h-8 bg-gray-200 rounded w-64 mb-2 animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded w-96 animate-pulse"></div>
+          </div>
+          
+          {/* Board Skeleton */}
+          <div className="flex gap-6 overflow-x-auto">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex-shrink-0 w-80">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="h-6 bg-gray-200 rounded w-32 mb-4 animate-pulse"></div>
+                  <div className="space-y-3">
+                    {[1, 2].map(j => (
+                      <div key={j} className="bg-gray-50 rounded-lg p-3">
+                        <div className="h-4 bg-gray-200 rounded w-full mb-2 animate-pulse"></div>
+                        <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -231,7 +344,7 @@ export default function BoardPage() {
           <div className="text-red-600 text-xl mb-4">⚠️</div>
           <p className="text-red-600 mb-4">Error: {error}</p>
           <button
-            onClick={fetchBoard}
+            onClick={() => fetchBoard(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
           >
             Try Again
@@ -249,6 +362,7 @@ export default function BoardPage() {
         onAddTask={addTask}
         onMoveTask={moveTask}
         onDeleteTask={deleteTask}
+        savingTasks={savingTasks}
       />
     </div>
   );

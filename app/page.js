@@ -7,17 +7,50 @@ export default function Home() {
   const router = useRouter();
 
   const generateRandomAlias = () => {
-    const adjectives = ['swift', 'bright', 'clever', 'quick', 'smart', 'bold', 'cool', 'fresh', 'sharp', 'keen'];
-    const nouns = ['panda', 'tiger', 'eagle', 'shark', 'wolf', 'falcon', 'lion', 'bear', 'fox', 'hawk'];
+    const adjectives = ['swift', 'bright', 'clever', 'quick', 'smart', 'bold', 'cool', 'fresh', 'sharp', 'keen', 'wise', 'fast', 'sleek', 'agile', 'brave'];
+    const nouns = ['panda', 'tiger', 'eagle', 'shark', 'wolf', 'falcon', 'lion', 'bear', 'fox', 'hawk', 'dragon', 'phoenix', 'lynx', 'jaguar', 'leopard'];
     const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-    return `${randomAdj}${randomNoun}`;
+    // Add a random number to make it more unique
+    const randomNum = Math.floor(Math.random() * 999) + 1;
+    return `${randomAdj}${randomNoun}${randomNum}`;
   };
 
   useEffect(() => {
-    // Redirect to a random alias board on initial load
-    const randomAlias = generateRandomAlias();
-    router.push(`/${randomAlias}`);
+    const createUniqueBoard = async () => {
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        const randomAlias = generateRandomAlias();
+        const randomPassword = Math.random().toString(36).substring(2, 15);
+        
+        try {
+          // Check if board exists by making a quick API call
+          const response = await fetch(`/api/boards/${randomAlias}`);
+          
+          if (response.status === 404 || response.status === 500) {
+            // Board doesn't exist, safe to use this alias
+            router.push(`/${randomAlias}?pwd=${randomPassword}&new=true`);
+            return;
+          }
+          
+          // Board exists, try again
+          attempts++;
+        } catch (err) {
+          // Network error, just use the alias anyway
+          router.push(`/${randomAlias}?pwd=${randomPassword}&new=true`);
+          return;
+        }
+      }
+      
+      // If all attempts failed, use timestamp to ensure uniqueness
+      const timestampAlias = `board${Date.now()}`;
+      const randomPassword = Math.random().toString(36).substring(2, 15);
+      router.push(`/${timestampAlias}?pwd=${randomPassword}&new=true`);
+    };
+    
+    createUniqueBoard();
   }, [router]);
 
   return (

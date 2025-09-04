@@ -16,6 +16,10 @@ export default function KanbanColumn({
   isProgressColumn = false,
   isCompleteColumn = false,
   isMobile = false,
+  savingTasks = new Set(),
+  selectedTask = null,
+  onTaskSelect = () => {},
+  isReadOnly = false,
 }) {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskContent, setNewTaskContent] = useState('');
@@ -96,8 +100,16 @@ export default function KanbanColumn({
 
   const columnHeight = isMobile ? 'flex-1' : 'h-[calc(100vh-12rem)]';
 
+  const handleColumnClick = (e) => {
+    // Prevent board deselect when clicking inside column
+    e.stopPropagation();
+  };
+
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 flex flex-col ${isMobile ? 'flex-1 min-h-0' : 'h-[calc(100vh-12rem)]'}`}>
+    <div 
+      className={`bg-white rounded-lg border border-gray-200 flex flex-col ${isMobile ? 'flex-1 min-h-0' : 'h-[calc(100vh-12rem)]'}`}
+      onClick={handleColumnClick}
+    >
       {/* Column Header */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
@@ -108,14 +120,21 @@ export default function KanbanColumn({
               {count}
             </span>
           </div>
-          <button
-            onClick={() => setIsAddingTask(true)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => setIsAddingTask(true)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
+          {isReadOnly && (
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+              Read-only
+            </span>
+          )}
         </div>
       </div>
 
@@ -128,7 +147,7 @@ export default function KanbanColumn({
       >
         <div className="space-y-3">
           {/* Add Task Input */}
-          {isAddingTask && (
+          {isAddingTask && !isReadOnly && (
             <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-3">
               <input
                 type="text"
@@ -156,13 +175,17 @@ export default function KanbanColumn({
 
           {/* Tasks */}
           {column?.tasks?.map((task, index) => (
-            <div key={task.id}>
+            <div key={`${task.id}-${index}`}>
               <TaskCard
                 task={task}
                 index={index}
-                onDelete={onDeleteTask}
-                onDragStart={() => onDragStart(task, column.id)}
+                onDelete={isReadOnly ? null : onDeleteTask}
+                onDragStart={isReadOnly ? null : () => onDragStart(task, column.id)}
                 onDragEnd={onDragEnd}
+                isBeingSaved={savingTasks.has(task.id)}
+                isSelected={selectedTask?.id === task.id}
+                onSelect={onTaskSelect}
+                isReadOnly={isReadOnly}
               />
               
               {/* Drop Indicator */}

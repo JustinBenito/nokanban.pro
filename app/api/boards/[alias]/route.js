@@ -1,74 +1,51 @@
-import fs from 'fs';
-import path from 'path';
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const BOARDS_FILE = path.join(DATA_DIR, 'boards.json');
-
-// Ensure data directory exists
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-// Get all boards data
-function getBoardsData() {
-  ensureDataDir();
-  if (!fs.existsSync(BOARDS_FILE)) {
-    fs.writeFileSync(BOARDS_FILE, JSON.stringify({}));
-    return {};
-  }
-  const data = fs.readFileSync(BOARDS_FILE, 'utf8');
-  return JSON.parse(data);
-}
-
-// Save boards data
-function saveBoardsData(boards) {
-  ensureDataDir();
-  fs.writeFileSync(BOARDS_FILE, JSON.stringify(boards, null, 2));
-}
+import { getBoardByAlias, updateBoard, deleteBoard, duplicateBoard } from '../../../../lib/database.js';
 
 // GET - Fetch board data by alias
 export async function GET(request, { params }) {
   try {
-    const { alias } = params;
-    const boards = getBoardsData();
+    const { alias } = await params;
+    const url = new URL(request.url);
+    const isNew = url.searchParams.get('new') === 'true';
+    const password = url.searchParams.get('pwd');
     
-    const board = boards[alias] || {
-      alias,
-      columns: {
-        'todo': { id: 'todo', title: 'To-do', tasks: [] },
-        'inprogress': { id: 'inprogress', title: 'In Progress', tasks: [] },
-        'complete': { id: 'complete', title: 'Complete', tasks: [] }
-      },
-      columnOrder: ['todo', 'inprogress', 'complete'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
+    // If it's a new board request and has password, create with password
+    const newBoardPassword = isNew && password ? password : null;
+    
+    const board = await getBoardByAlias(alias, newBoardPassword);
     return Response.json(board);
   } catch (error) {
-    return Response.json({ error: 'Failed to fetch board' }, { status: 500 });
+    console.error('Error fetching board:', error);
+    
+    // Handle specific Supabase errors
+    if (error.message?.includes('Missing Supabase environment variables')) {
+      return Response.json({ 
+        error: 'Database configuration error. Please check environment variables.',
+        details: error.message
+      }, { status: 500 });
+    }
+    
+    return Response.json({ 
+      error: 'Failed to fetch board',
+      details: error.message
+    }, { status: 500 });
   }
 }
 
 // PUT - Update board data
 export async function PUT(request, { params }) {
   try {
-    const { alias } = params;
+    const { alias } = await params;
+    const url = new URL(request.url);
+    const password = url.searchParams.get('pwd');
     const updatedBoard = await request.json();
     
-    const boards = getBoardsData();
-    boards[alias] = {
-      ...updatedBoard,
-      alias,
-      updatedAt: new Date().toISOString()
-    };
-    
-    saveBoardsData(boards);
-    
-    return Response.json(boards[alias]);
+    const board = await updateBoard(alias, updatedBoard, password);
+    return Response.json(board);
   } catch (error) {
+    console.error('Error updating board:', error);
+    if (error.message.includes('Invalid password')) {
+      return Response.json({ error: 'Invalid password for board modification' }, { status: 403 });
+    }
     return Response.json({ error: 'Failed to update board' }, { status: 500 });
   }
 }
@@ -76,16 +53,44 @@ export async function PUT(request, { params }) {
 // DELETE - Delete board
 export async function DELETE(request, { params }) {
   try {
-    const { alias } = params;
-    const boards = getBoardsData();
+    const { alias } = await params;
+    const url = new URL(request.url);
+    const password = url.searchParams.get('pwd');
     
-    if (boards[alias]) {
-      delete boards[alias];
-      saveBoardsData(boards);
+    // For now, we'll require password validation for board deletion
+    if (password) {
+      const { validateBoardPassword } = await import('../../../../lib/database.js');
+      const isValid = await validateBoardPassword(alias, password);
+      if (!isValid) {
+        return Response.json({ error: 'Invalid password for board deletion' }, { status: 403 });
+      }
     }
     
+    await deleteBoard(alias);
     return Response.json({ success: true });
   } catch (error) {
+    console.error('Error deleting board:', error);
     return Response.json({ error: 'Failed to delete board' }, { status: 500 });
+  }
+}
+
+// POST - Duplicate/Clone board to new alias
+export async function POST(request, { params }) {
+  try {
+    const { alias: newAlias } = await params;
+    const { sourceAlias, password, boardData } = await request.json();
+    
+    if (!sourceAlias) {
+      return Response.json({ error: 'Source alias is required' }, { status: 400 });
+    }
+    
+    const duplicatedBoard = await duplicateBoard(sourceAlias, newAlias, password);
+    return Response.json(duplicatedBoard);
+  } catch (error) {
+    console.error('Error duplicating board:', error);
+    if (error.message.includes('already exists')) {
+      return Response.json({ error: 'Board alias already exists' }, { status: 409 });
+    }
+    return Response.json({ error: 'Failed to duplicate board' }, { status: 500 });
   }
 }

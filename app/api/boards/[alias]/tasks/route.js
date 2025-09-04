@@ -1,67 +1,26 @@
-import fs from 'fs';
-import path from 'path';
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const BOARDS_FILE = path.join(DATA_DIR, 'boards.json');
-
-function getBoardsData() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(BOARDS_FILE)) {
-    fs.writeFileSync(BOARDS_FILE, JSON.stringify({}));
-    return {};
-  }
-  const data = fs.readFileSync(BOARDS_FILE, 'utf8');
-  return JSON.parse(data);
-}
-
-function saveBoardsData(boards) {
-  fs.writeFileSync(BOARDS_FILE, JSON.stringify(boards, null, 2));
-}
+import { addTask, moveTask } from '../../../../../lib/database.js';
 
 // POST - Add new task
 export async function POST(request, { params }) {
   try {
-    const { alias } = params;
-    const { content, columnId } = await request.json();
+    const { alias } = await params;
+    const url = new URL(request.url);
+    const password = url.searchParams.get('pwd');
+    const { content, columnId, title, description, priority } = await request.json();
     
-    const boards = getBoardsData();
-    
-    // Initialize board if it doesn't exist
-    if (!boards[alias]) {
-      boards[alias] = {
-        alias,
-        columns: {
-          'todo': { id: 'todo', title: 'To-do', tasks: [] },
-          'inprogress': { id: 'inprogress', title: 'In Progress', tasks: [] },
-          'complete': { id: 'complete', title: 'Complete', tasks: [] }
-        },
-        columnOrder: ['todo', 'inprogress', 'complete'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-    }
-    
-    // Create new task
-    const newTask = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      content,
-      createdAt: new Date().toISOString()
+    const taskData = {
+      title: title || content || 'Untitled Task',
+      description: description || '',
+      priority: priority || 'medium'
     };
     
-    // Add task to specified column
-    if (boards[alias].columns[columnId]) {
-      boards[alias].columns[columnId].tasks.push(newTask);
-      boards[alias].updatedAt = new Date().toISOString();
-    } else {
-      return Response.json({ error: 'Invalid column ID' }, { status: 400 });
-    }
-    
-    saveBoardsData(boards);
-    
+    const newTask = await addTask(alias, columnId, taskData, password);
     return Response.json(newTask);
   } catch (error) {
+    console.error('Error creating task:', error);
+    if (error.message.includes('Invalid password')) {
+      return Response.json({ error: 'Invalid password for task creation' }, { status: 403 });
+    }
     return Response.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }
@@ -69,44 +28,54 @@ export async function POST(request, { params }) {
 // PUT - Move task between columns
 export async function PUT(request, { params }) {
   try {
-    const { alias } = params;
-    const { taskId, sourceColumnId, destinationColumnId, destinationIndex } = await request.json();
+    const { alias } = await params;
+    const body = await request.json();
+    const { taskId, sourceColumnId, destinationColumnId, destinationIndex } = body;
     
-    const boards = getBoardsData();
-    
-    if (!boards[alias]) {
-      return Response.json({ error: 'Board not found' }, { status: 404 });
+    // Validate taskId format (check if it's a valid UUID or temp ID)
+    if (taskId.toString().startsWith('temp-')) {
+      return Response.json({ 
+        error: 'Cannot move temporary task',
+        details: 'Task is still being saved to database'
+      }, { status: 400 });
     }
     
-    const board = boards[alias];
-    
-    // Find and remove task from source column
-    let task = null;
-    const sourceColumn = board.columns[sourceColumnId];
-    if (sourceColumn) {
-      const taskIndex = sourceColumn.tasks.findIndex(t => t.id === taskId);
-      if (taskIndex > -1) {
-        task = sourceColumn.tasks.splice(taskIndex, 1)[0];
-      }
+    // Basic UUID format validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(taskId)) {
+      return Response.json({ 
+        error: 'Invalid task ID',
+        details: 'Task ID must be a valid UUID'
+      }, { status: 400 });
     }
     
-    if (!task) {
-      return Response.json({ error: 'Task not found' }, { status: 404 });
-    }
+    const url = new URL(request.url);
+    const password = url.searchParams.get('pwd');
     
-    // Add task to destination column
-    const destinationColumn = board.columns[destinationColumnId];
-    if (destinationColumn) {
-      destinationColumn.tasks.splice(destinationIndex, 0, task);
-    } else {
-      return Response.json({ error: 'Invalid destination column' }, { status: 400 });
-    }
-    
-    board.updatedAt = new Date().toISOString();
-    saveBoardsData(boards);
-    
-    return Response.json({ success: true });
+    const result = await moveTask(alias, taskId, sourceColumnId, destinationColumnId, destinationIndex, password);
+    return Response.json(result);
   } catch (error) {
-    return Response.json({ error: 'Failed to move task' }, { status: 500 });
+    console.error('Error moving task:', error);
+    console.error('Error details:', error.message);
+    console.error('Error code:', error.code);
+    
+    // Handle password errors
+    if (error.message.includes('Invalid password')) {
+      return Response.json({ error: 'Invalid password for task movement' }, { status: 403 });
+    }
+    
+    // Handle specific database errors
+    if (error.code === '22P02') {
+      return Response.json({ 
+        error: 'Invalid task ID format',
+        details: 'The task ID is not in the correct format'
+      }, { status: 400 });
+    }
+    
+    return Response.json({ 
+      error: 'Failed to move task',
+      details: error.message,
+      code: error.code 
+    }, { status: 500 });
   }
 }

@@ -147,5 +147,38 @@
     ],
     "createdAt": "2025-09-03T11:23:38.013Z",
     "updatedAt": "2025-09-03T11:35:14.145Z"
+  },
+  "brightpanda": {
+    "alias": "brightpanda",
+    "columns": {
+      "todo": {
+        "id": "todo",
+        "title": "To-do",
+        "tasks": [
+          {
+            "id": "task-1756918787066-nml1d0zr3",
+            "content": "guog",
+            "createdAt": "2025-09-03T16:59:47.066Z"
+          }
+        ]
+      },
+      "inprogress": {
+        "id": "inprogress",
+        "title": "In Progress",
+        "tasks": []
+      },
+      "complete": {
+        "id": "complete",
+        "title": "Complete",
+        "tasks": []
+      }
+    },
+    "columnOrder": [
+      "todo",
+      "inprogress",
+      "complete"
+    ],
+    "createdAt": "2025-09-03T16:59:47.066Z",
+    "updatedAt": "2025-09-03T16:59:47.066Z"
   }
 }
